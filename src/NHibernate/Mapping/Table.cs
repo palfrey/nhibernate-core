@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using NHibernate.Dialect;
 using NHibernate.Dialect.Schema;
 using NHibernate.Engine;
 using NHibernate.Util;
@@ -72,7 +74,7 @@ namespace NHibernate.Mapping
 		/// </p>
 		/// <p>
 		/// The value returned by the getter is not Quoted.  To get the
-		/// column name in quoted form use <see cref="GetQuotedName(Dialect.Dialect)"/>.
+		/// column name in quoted form use <see cref="GetQuotedName()"/>.
 		/// </p>
 		/// </remarks>
 		public string Name
@@ -320,7 +322,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Generates the SQL string to create this Table in the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="NHibernate.Dialect"/> to use for SQL rules.</param>
 		/// <param name="p"></param>
 		/// <param name="defaultCatalog"></param>
 		/// <param name="defaultSchema"></param>
@@ -331,7 +333,7 @@ namespace NHibernate.Mapping
 		public string SqlCreateString(Dialect.Dialect dialect, IMapping p, string defaultCatalog, string defaultSchema)
 		{
 			StringBuilder buf =
-				new StringBuilder(HasPrimaryKey ? dialect.CreateTableString : dialect.CreateMultisetTableString).Append(' ').Append(
+				new StringBuilder(HasPrimaryKey ? dialect.CreateTableString : dialect.CreateMultISetTableString).Append(' ').Append(
 					GetQualifiedName(dialect, defaultCatalog, defaultSchema)).Append(" (");
 
 			bool identityColumn = idValue != null && idValue.IsIdentityColumn(dialect);
@@ -441,7 +443,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Generates the SQL string to drop this Table in the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="NHibernate.Dialect"/> to use for SQL rules.</param>
 		/// <param name="defaultCatalog"></param>
 		/// <param name="defaultSchema"></param>
 		/// <returns>
@@ -458,7 +460,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Gets the schema qualified name of the Table.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect"/> that knows how to Quote the Table name.</param>
+		/// <param name="dialect">The <see cref="NHibernate.Dialect"/> that knows how to Quote the Table name.</param>
 		/// <returns>The name of the table qualified with the schema if one is specified.</returns>
 		public string GetQualifiedName(Dialect.Dialect dialect)
 		{
@@ -468,7 +470,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Gets the schema qualified name of the Table using the specified qualifier
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect"/> that knows how to Quote the Table name.</param>
+		/// <param name="dialect">The <see cref="NHibernate.Dialect"/> that knows how to Quote the Table name.</param>
 		/// <param name="defaultCatalog">The catalog name.</param>
 		/// <param name="defaultSchema">The schema name.</param>
 		/// <returns>A String representing the Qualified name.</returns>
@@ -485,6 +487,19 @@ namespace NHibernate.Mapping
 			return dialect.Qualify(usedCatalog, usedSchema, quotedName);
 		}
 
+        public virtual string GetQualifiedName(string defaultCatalog, string defaultSchema)
+        {
+            if (!string.IsNullOrEmpty(subselect))
+            {
+                return "( " + subselect + " )";
+            }
+            var dialect = new GenericDialect();
+            string quotedName = GetQuotedName(dialect);
+            string usedSchema = schema == null ? defaultSchema : GetQuotedSchema(dialect);
+            string usedCatalog = catalog ?? defaultCatalog;
+            return dialect.Qualify(usedCatalog, usedSchema, quotedName);
+        }
+
 		/// <summary> returns quoted name as it would be in the mapping file.</summary>
 		public string GetQuotedName()
 		{
@@ -495,7 +510,7 @@ namespace NHibernate.Mapping
 		/// Gets the name of this Table in quoted form if it is necessary.
 		/// </summary>
 		/// <param name="dialect">
-		/// The <see cref="Dialect.Dialect"/> that knows how to quote the Table name.
+		/// The <see cref="Dialect"/> that knows how to quote the Table name.
 		/// </param>
 		/// <returns>
 		/// The Table name in a form that is safe to use inside of a SQL statement.
@@ -521,7 +536,7 @@ namespace NHibernate.Mapping
 		/// Gets the schema for this table in quoted form if it is necessary.
 		/// </summary>
 		/// <param name="dialect">
-		/// The <see cref="Dialect.Dialect" /> that knows how to quote the table name.
+		/// The <see cref="Dialect" /> that knows how to quote the table name.
 		/// </param>
 		/// <returns>
 		/// The schema name for this table in a form that is safe to use inside
@@ -1066,5 +1081,129 @@ namespace NHibernate.Mapping
 		}
 
 		#endregion
+
+        private string generateColumn(Column column, MigratorDialect dialect, IMapping p)
+        {
+            StringBuilder alter = new StringBuilder();
+            alter.AppendFormat("new Column(\"{1}\", {2}", name, column.GetQuotedName(dialect), column.GetSqlType(dialect, p));
+
+            if (column.IsLengthDefined())
+                alter.Append(string.Format(", {0}", column.Length));
+
+            if (HasPrimaryKey && PrimaryKey.Columns.Contains(column))
+                alter.Append(", ColumnProperty.PrimaryKeyWithIdentity");
+            else if (column.IsNullable)
+                alter.Append(", ColumnProperty.Null");
+            else
+                alter.Append(", ColumnProperty.NotNull");
+            alter.Append(")");
+            return alter.ToString();
+        }
+	
+
+        public string MigratorCreateString(MigratorDialect dialect, IMapping p, string defaultCatalog, string defaultSchema)
+        {
+            StringBuilder buf =
+                new StringBuilder(string.Format("Database.AddTable({0}, new[] {{\n", name));
+
+            foreach (Column col in ColumnIterator)
+            {
+                buf.Append("\t" + generateColumn(col, dialect, p));
+
+                if (col.IsUnique)
+                {
+                    UniqueKey uk = GetUniqueKey(col.GetQuotedName() + "_");
+                    uk.AddColumn(col);
+                }
+
+                if (col.HasCheckConstraint)
+                {
+                    buf.Append(" check( ").Append(col.CheckConstraint).Append(") ");
+                }
+
+                if (string.IsNullOrEmpty(col.Comment) == false)
+                {
+                    buf.Append("// FIXME: comment - "+col.Comment);
+                }
+                buf.Append(",\n");
+
+            }
+            buf.Append("});\n");
+            /*if (HasPrimaryKey)
+            {
+                buf.Append(PrimaryKey.MigratorConstraintString(defaultSchema));
+            }*/
+
+            foreach (UniqueKey uk in UniqueKeyIterator)
+            {
+                buf.Append(',').Append(uk.SqlConstraintString());
+            }
+
+            foreach (string checkConstraint in checkConstraints)
+            {
+                buf.Append(", check (").Append(checkConstraint).Append(") ");
+            }
+
+            if (string.IsNullOrEmpty(comment) == false)
+            {
+                buf.Append("// FIXME: table comment - " + comment);
+            }
+
+            return buf.ToString();
+	    }
+
+	    public string MigratorDropString(string defaultCatalog, string defaultSchema)
+	    {
+            return string.Format("Database.RemoveTable({0});", name);
+	    }
+
+        public string[] MigratorAlterStrings(MigratorDialect dialect, IMapping p, ITableMetadata tableInfo, string defaultCatalog,
+                                        string defaultSchema)
+        {
+            var results = new List<string>(ColumnSpan);
+
+            foreach (Column column in ColumnIterator)
+            {
+                IColumnMetadata columnInfo = tableInfo.GetColumnMetadata(column.Name);
+                if (columnInfo != null)
+                {
+                    continue;
+                }
+
+                StringBuilder alter =
+                    new StringBuilder(string.Format("Database.AddColumn({0}, ", name));
+                alter.Append(generateColumn(column, dialect, p));
+                alter.Append(");");
+
+                string columnComment = column.Comment;
+                if (columnComment != null)
+                {
+                    alter.Append(dialect.GetColumnComment(columnComment));
+                }
+
+                results.Add(alter.ToString());
+            }
+
+            return results.ToArray();
+        }
+
+        public string[] MigratorDestroyAlterStrings(MigratorDialect dialect, IMapping p, ITableMetadata tableInfo, string defaultCatalog,
+                                        string defaultSchema)
+        {
+            var results = new List<string>(ColumnSpan);
+
+            foreach (Column column in ColumnIterator)
+            {
+                IColumnMetadata columnInfo = tableInfo.GetColumnMetadata(column.Name);
+                if (columnInfo != null)
+                {
+                    continue;
+                }
+
+                results.Add(string.Format("Database.RemoveColumn({0}, \"{1}\");", Name, column.GetQuotedName(dialect)));
+            }
+
+            return results.ToArray();
+        }
 	}
 }

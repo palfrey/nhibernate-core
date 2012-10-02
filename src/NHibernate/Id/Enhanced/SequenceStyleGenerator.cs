@@ -80,7 +80,17 @@ namespace NHibernate.Id.Enhanced
 			return databaseStructure.Name;
 		}
 
-		#endregion
+        public string[] MigratorCreateStrings()
+	    {
+            return new []{"// FIXME: create sequence style generator"};
+	    }
+
+	    public string[] MigratorDropString()
+	    {
+	        throw new System.NotImplementedException();
+	    }
+
+	    #endregion
 
 		#region Implementation of IConfigurable
 

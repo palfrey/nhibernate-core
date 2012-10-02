@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NHibernate.AdoNet.Util;
 
 namespace NHibernate.Id
@@ -73,5 +74,8 @@ namespace NHibernate.Id
 		/// Prevents us from trying to create/remove them multiple times
 		/// </remarks>
 		string GeneratorKey();
+
+        string[] MigratorCreateStrings();
+	    string[] MigratorDropString();
 	}
 }

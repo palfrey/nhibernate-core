@@ -1,4 +1,5 @@
 using System;
+using NHibernate.Dialect;
 using NHibernate.Dialect.Function;
 using NHibernate.Engine;
 using NHibernate.SqlTypes;
@@ -74,7 +75,7 @@ namespace NHibernate.Mapping
 		/// </p>
 		/// <p>
 		/// The value returned by the getter is not Quoted.  To get the
-		/// column name in quoted form use <see cref="GetQuotedName(Dialect.Dialect)"/>.
+		/// column name in quoted form use <see cref="GetQuotedName()"/>.
 		/// </p>
 		/// </remarks>
 		public string Name
@@ -103,7 +104,7 @@ namespace NHibernate.Mapping
 		/// Gets the name of this Column in quoted form if it is necessary.
 		/// </summary>
 		/// <param name="d">
-		/// The <see cref="Dialect.Dialect"/> that knows how to quote
+		/// The <see cref="Dialect"/> that knows how to quote
 		/// the column name.
 		/// </param>
 		/// <returns>
@@ -193,7 +194,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Gets the name of the data type for the column.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect.Dialect"/> to use to get the valid data types.</param>
+		/// <param name="dialect">The <see cref="Dialect"/> to use to get the valid data types.</param>
 		/// <param name="mapping"></param>
 		/// <returns>
 		/// The name of the data type for the column. 
@@ -201,7 +202,7 @@ namespace NHibernate.Mapping
 		/// <remarks>
 		/// If the mapping file contains a value of the attribute <c>sql-type</c> this will
 		/// return the string contained in that attribute.  Otherwise it will use the 
-		/// typename from the <see cref="Dialect.Dialect"/> of the <see cref="SqlType"/> object. 
+		/// typename from the <see cref="Dialect"/> of the <see cref="SqlType"/> object. 
 		/// </remarks>
 		public string GetSqlType(Dialect.Dialect dialect, IMapping mapping)
 		{

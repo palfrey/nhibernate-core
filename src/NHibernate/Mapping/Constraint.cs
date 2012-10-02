@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using NHibernate.Dialect;
 using NHibernate.Engine;
 using NHibernate.Util;
 
@@ -91,7 +92,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Generates the SQL string to drop this Constraint in the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="defaultSchema"></param>
 		/// <param name="defaultCatalog"></param>
 		/// <returns>
@@ -114,10 +115,22 @@ namespace NHibernate.Mapping
 			}
 		}
 
-		/// <summary>
+        public virtual string MigratorCreateString(MigratorDialect dialect, IMapping mapping, string defaultCatalog, string defaultSchema)
+	    {
+            return "// FIXME constraint create";
+	    }
+
+	    public abstract string NiceName();
+
+        public virtual string MigratorDropString(string defaultCatalog, string defaultSchema)
+	    {
+            return string.Format("Database.RemoveConstraint(\"{0}\", \"{1}\");", Table.Name, NiceName());
+        }
+
+	    /// <summary>
 		/// Generates the SQL string to create this Constraint in the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="p"></param>
 		/// <param name="defaultSchema"></param>
 		/// <param name="defaultCatalog"></param>
@@ -146,7 +159,7 @@ namespace NHibernate.Mapping
 		/// When implemented by a class, generates the SQL string to create the named
 		/// Constraint in the database.
 		/// </summary>
-		/// <param name="d">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="d">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="constraintName">The name to use as the identifier of the constraint in the database.</param>
 		/// <param name="defaultSchema"></param>
 		/// <param name="defaultCatalog"></param>

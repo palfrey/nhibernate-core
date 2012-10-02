@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using NHibernate.Dialect;
 using NHibernate.Engine;
 using NHibernate.Util;
 
@@ -53,7 +54,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Generates the SQL string to create this Index in the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="p"></param>
 		/// <param name="defaultCatalog"></param>
 		/// <param name="defaultSchema"></param>
@@ -68,7 +69,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Generates the SQL string to drop this Index in the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="defaultCatalog"></param>
 		/// <param name="defaultSchema"></param>
 		/// <returns>
@@ -147,5 +148,15 @@ namespace NHibernate.Mapping
 		{
 			return GetType().FullName + "(" + Name + ")";
 		}
+
+        public string MigratorCreateString(MigratorDialect dialect, IMapping mapping, string defaultCatalog, string defaultSchema)
+	    {
+	        return "// FIXME: create index";
+	    }
+
+	    public string MigratorDropString(string defaultCatalog, string defaultSchema)
+	    {
+	        throw new NotImplementedException();
+	    }
 	}
 }

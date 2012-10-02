@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text;
 using NHibernate.Engine;
 using NHibernate.Util;
@@ -34,6 +35,25 @@ namespace NHibernate.Mapping
 			//do not add unique constraint on DB not supporting unique and nullable columns
 			return !nullable || dialect.SupportsNotNullUnique ? buf.Append(StringHelper.ClosedParen).ToString() : null;
 		}
+
+        public string SqlConstraintString()
+        {
+            StringBuilder buf = new StringBuilder("unique (");
+            bool commaNeeded = false;
+            bool nullable = false;
+            foreach (Column column in ColumnIterator)
+            {
+                if (!nullable && column.IsNullable)
+                    nullable = true;
+
+                if (commaNeeded)
+                    buf.Append(StringHelper.CommaSpace);
+                commaNeeded = true;
+                buf.Append(column.GetQuotedName());
+            }
+            //do not add unique constraint on DB not supporting unique and nullable columns
+            return !nullable ? buf.Append(StringHelper.ClosedParen).ToString() : null;
+        }
 
 		/// <summary>
 		/// Generates the SQL string to create the Unique Key Constraint in the database.
@@ -80,6 +100,13 @@ namespace NHibernate.Mapping
 			}
 		}
 
+        public override string NiceName()
+        {
+            if (Columns.Count != 1)
+                throw new Exception("Column count is" + Columns.Count.ToString());
+            return string.Format("UK_{0}_{1}", Table.Name, Columns.First().Name);
+        }
+
 		#region IRelationalModel Members
 
 		/// <summary>
@@ -112,5 +139,10 @@ namespace NHibernate.Mapping
 			}
 			return true;
 		}
+
+	    public string MigratorCreateString(IMapping mapping, string defaultCatalog, string defaultSchema)
+	    {
+            return "// FIXME: create unique key";
+	    }
 	}
 }

@@ -1,5 +1,6 @@
 using System;
 using Iesi.Collections.Generic;
+using NHibernate.Dialect;
 using NHibernate.Engine;
 using NHibernate.Util;
 
@@ -43,7 +44,17 @@ namespace NHibernate.Mapping
 			return InjectCatalogAndSchema(sqlDropString, defaultCatalog, defaultSchema);
 		}
 
-		private static string InjectCatalogAndSchema(string ddlString, string defaultCatalog, string defaultSchema)
+        public override string MigratorCreateString(MigratorDialect dialect, IMapping mapping, string defaultCatalog, string defaultSchema)
+	    {
+            return InjectCatalogAndSchema(sqlCreateString, defaultCatalog, defaultSchema);
+	    }
+
+	    public override string MigratorDropString(string defaultCatalog, string defaultSchema)
+	    {
+            return InjectCatalogAndSchema(sqlDropString, defaultCatalog, defaultSchema);
+	    }
+
+	    private static string InjectCatalogAndSchema(string ddlString, string defaultCatalog, string defaultSchema)
 		{
 			string rtn = StringHelper.Replace(ddlString, "${catalog}", defaultCatalog);
 			rtn = StringHelper.Replace(rtn, "${schema}", defaultSchema);

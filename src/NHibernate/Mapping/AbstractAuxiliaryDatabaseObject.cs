@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Iesi.Collections.Generic;
+using NHibernate.Dialect;
 using NHibernate.Engine;
 
 namespace NHibernate.Mapping
@@ -58,5 +59,7 @@ namespace NHibernate.Mapping
 			this.parameters = parameters;
 		}
 
+        public abstract string MigratorCreateString(MigratorDialect dialect, IMapping mapping, string defaultCatalog, string defaultSchema);
+	    public abstract string MigratorDropString(string defaultCatalog, string defaultSchema);
 	}
 }

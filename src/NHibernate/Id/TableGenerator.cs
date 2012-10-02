@@ -207,7 +207,17 @@ namespace NHibernate.Id
 			return tableName;
 		}
 
-		#endregion
+	    public string[] MigratorCreateStrings()
+	    {
+	        throw new NotImplementedException();
+	    }
+
+	    public string[] MigratorDropString()
+	    {
+	        throw new NotImplementedException();
+	    }
+
+	    #endregion
 
 		public override object DoWorkInCurrentTransaction(ISessionImplementor session, IDbConnection conn,
 		                                                  IDbTransaction transaction)

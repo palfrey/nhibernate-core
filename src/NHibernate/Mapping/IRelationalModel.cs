@@ -1,3 +1,4 @@
+using NHibernate.Dialect;
 using NHibernate.Engine;
 
 namespace NHibernate.Mapping
@@ -11,7 +12,7 @@ namespace NHibernate.Mapping
 		/// When implemented by a class, generates the SQL string to create 
 		/// the mapping element in the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="p"></param>
 		/// <param name="defaultSchema"></param>
 		/// <param name="defaultCatalog"></param>
@@ -24,12 +25,15 @@ namespace NHibernate.Mapping
 		/// When implemented by a class, generates the SQL string to drop 
 		/// the mapping element from the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="defaultCatalog"></param>
 		/// <param name="defaultSchema"></param>
 		/// <returns>
 		/// A string that contains the SQL to drop an object.
 		/// </returns>
 		string SqlDropString(Dialect.Dialect dialect, string defaultCatalog, string defaultSchema);
+
+        string MigratorCreateString(MigratorDialect dialect, IMapping mapping, string defaultCatalog, string defaultSchema);
+        string MigratorDropString(string defaultCatalog, string defaultSchema);
 	}
 }

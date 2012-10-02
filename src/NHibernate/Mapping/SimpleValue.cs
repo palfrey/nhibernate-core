@@ -95,6 +95,13 @@ namespace NHibernate.Mapping
 					typeof (IdentityGenerator));
 		}
 
+        public bool IsIdentityColumn()
+        {
+            return false; // FIXME: check this
+                /*IdentifierGeneratorFactory.GetIdentifierGeneratorClass(identifierGeneratorStrategy).Equals(
+                    typeof(IdentityGenerator));*/
+        }
+
 		public string NullValue
 		{
 			get { return nullValue; }

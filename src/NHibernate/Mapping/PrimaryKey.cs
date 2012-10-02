@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text;
 using NHibernate.Util;
 
@@ -33,6 +34,19 @@ namespace NHibernate.Mapping
 			}
 			return buf.Append(StringHelper.ClosedParen).ToString();
 		}
+
+        public override string NiceName()
+        {
+            if (Columns.Count != 1)
+                throw new Exception("Column count is" + Columns.Count.ToString());
+            return string.Format("PK_{0}_{1}", Table.Name, Columns.First().Name);
+        }
+
+        public string MigratorConstraintString(string defaultSchema)
+        {
+            return string.Format("Database.AddPrimaryKey(\"{0}\", \"{2}\", new [] {{ {1} }});\n",
+                                 NiceName(), string.Join(", ", ColumnIterator.Select(c => "\"" + c.Name + "\"").ToArray()), Table.Name);
+        }
 
 		/// <summary>
 		/// Generates the SQL string to create the named Primary Key Constraint in the database.

@@ -191,6 +191,16 @@ namespace NHibernate.Id
 			return sequenceName;
 		}
 
-		#endregion
+        public string[] MigratorCreateStrings()
+	    {
+	        throw new NotImplementedException();
+	    }
+
+	    public string[] MigratorDropString()
+	    {
+	        throw new NotImplementedException();
+	    }
+
+	    #endregion
 	}
 }

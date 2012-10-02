@@ -1,8 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using NHibernate.Dialect;
+using NHibernate.Engine;
 using NHibernate.Util;
 using System;
+using System.Linq;
 
 namespace NHibernate.Mapping
 {
@@ -20,7 +23,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Generates the SQL string to create the named Foreign Key Constraint in the database.
 		/// </summary>
-		/// <param name="d">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="d">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="constraintName">The name to use as the identifier of the constraint in the database.</param>
 		/// <param name="defaultSchema"></param>
 		/// <param name="defaultCatalog"></param>
@@ -78,7 +81,7 @@ namespace NHibernate.Mapping
 		/// <summary>
 		/// Get the SQL string to drop this Constraint in the database.
 		/// </summary>
-		/// <param name="dialect">The <see cref="Dialect.Dialect"/> to use for SQL rules.</param>
+		/// <param name="dialect">The <see cref="Dialect"/> to use for SQL rules.</param>
 		/// <param name="defaultSchema"></param>
 		/// <param name="defaultCatalog"></param>
 		/// <returns>
@@ -88,7 +91,7 @@ namespace NHibernate.Mapping
 		{
 			string ifExists = dialect.GetIfExistsDropConstraint(Table, Name);
 			string drop = string.Format("alter table {0} {1}", Table.GetQualifiedName(dialect, defaultCatalog, defaultSchema),
-																	dialect.GetDropForeignKeyConstraintString(Name));
+										dialect.GetDropForeignKeyConstraintString(Name));
 			string end = dialect.GetIfExistsDropConstraintEnd(Table, Name);
 			return ifExists + System.Environment.NewLine + drop + System.Environment.NewLine + end;
 		}
@@ -178,10 +181,10 @@ namespace NHibernate.Mapping
 				result.Append(GetType().FullName)
 					.Append('(')
 					.Append(Table.Name)
-					.Append(ArrayHelper.ToStringArray((ICollection)Columns))
+					.Append(ArrayHelper.ToStringArray((ICollection) Columns))
 					.Append(" ref-columns:")
 					.Append('(')
-					.Append(ArrayHelper.ToStringArray((ICollection)ReferencedColumns))
+					.Append(ArrayHelper.ToStringArray((ICollection) ReferencedColumns))
 					.Append(") as ")
 					.Append(Name);
 				return result.ToString();
@@ -194,10 +197,7 @@ namespace NHibernate.Mapping
 
 		public bool HasPhysicalConstraint
 		{
-			get
-			{
-				return referencedTable.IsPhysicalTable && Table.IsPhysicalTable && !referencedTable.HasDenormalizedTables;
-			}
+			get { return referencedTable.IsPhysicalTable && Table.IsPhysicalTable && !referencedTable.HasDenormalizedTables; }
 		}
 
 		public IList<Column> ReferencedColumns
@@ -216,5 +216,47 @@ namespace NHibernate.Mapping
 		{
 			get { return referencedColumns.Count == 0; }
 		}
+
+		public override string NiceName()
+		{
+			if (Columns.Count != 1)
+				throw new Exception("Column count is" + Columns.Count.ToString());
+			return string.Format("fk_{0}_{1}", Table.Name, Columns.First().Name);
+		}
+
+		private string generateName()
+		{
+			return string.Format("Database.ForeignKeyName({0}, \"{1}\")", Table.Name, Columns.First().Name);
+		}
+
+		public new string MigratorCreateString(MigratorDialect dialect, IMapping mapping, string defaultCatalog, string defaultSchema)
+		{
+			List<Column> refiter;
+			if (IsReferenceToPrimaryKey)
+				refiter = referencedTable.PrimaryKey.ColumnIterator.ToList();
+			else
+				refiter = referencedColumns;
+
+			if (Columns.Count!=1)
+				throw new Exception("Column count is"+Columns.Count.ToString());
+
+			if (refiter.Count != 1)
+				throw new Exception("Referenced column count is" + refiter.Count.ToString());
+
+			if (refiter.First().Name.ToLower() == "id")
+				return string.Format("Database.AddForeignKey({0}, \"{1}\", {2});",
+									 Table.Name, Columns.First().Name, ReferencedTable.Name);
+			else
+			{
+				return string.Format("Database.AddForeignKey({4}, {0}, \"{1}\", {2}, \"{3}\");",
+									 Table.Name, Columns.First().Name, ReferencedTable.Name, refiter.First().Name, generateName());
+			}
+		}
+
+		public override string MigratorDropString(string defaultCatalog, string defaultSchema)
+		{
+			return string.Format("Database.RemoveForeignKey({0}, {1});", Table.Name, generateName());
+		}
+
 	}
 }

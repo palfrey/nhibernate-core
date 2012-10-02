@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security;
 using System.Text;
 using System.Xml;
 using System.Xml.Schema;
@@ -73,7 +74,7 @@ namespace NHibernate.Cfg
 
 		private EventListeners eventListeners;
 		protected IDictionary<string, TypeDef> typeDefs;
-		protected ISet<ExtendsQueueEntry> extendsQueue;
+		protected Iesi.Collections.Generic.ISet<ExtendsQueueEntry> extendsQueue;
 		protected IDictionary<string, Mappings.TableDescription> tableNameBinding;
 		protected IDictionary<Table, Mappings.ColumnNames> columnNameBindingPerTable;
 
@@ -99,7 +100,7 @@ namespace NHibernate.Cfg
 			defaultAssembly = GetSerialedObject<string>(info, "defaultAssembly");
 			defaultNamespace = GetSerialedObject<string>(info, "defaultNamespace");
 			eventListeners = GetSerialedObject<EventListeners>(info, "eventListeners");
-			//this.extendsQueue = GetSerialedObject<ISet<ExtendsQueueEntry>>(info, "extendsQueue");
+			//this.extendsQueue = GetSerialedObject<Iesi.Collections.Generic.ISet<ExtendsQueueEntry>>(info, "extendsQueue");
 			FilterDefinitions = GetSerialedObject<IDictionary<string, FilterDefinition>>(info, "filterDefinitions");
 			Imports = GetSerialedObject<IDictionary<string, string>>(info, "imports");
 			interceptor = GetSerialedObject<IInterceptor>(info, "interceptor");
@@ -124,6 +125,7 @@ namespace NHibernate.Cfg
 			return (T)info.GetValue(name, typeof(T));
 		}
 
+        [SecurityCritical]
 		public void GetObjectData(SerializationInfo info, StreamingContext context)
 		{
 			ConfigureProxyFactoryFactory();
@@ -765,7 +767,7 @@ namespace NHibernate.Cfg
 			return this;
 		}
 
-		private static IList<string> GetAllHbmXmlResourceNames(Assembly assembly)
+		public static IList<string> GetAllHbmXmlResourceNames(Assembly assembly)
 		{
 			var result = new List<string>();
 
@@ -2444,6 +2446,341 @@ namespace NHibernate.Cfg
 			return generators.Values;
 		}
 
+        public string[] MigratorDropScript(MigratorDialect dialect)
+        {
+            SecondPassCompile();
 
+            string defaultCatalog = PropertiesHelper.GetString(Environment.DefaultCatalog, properties, null);
+            string defaultSchema = PropertiesHelper.GetString(Environment.DefaultSchema, properties, null);
+
+            var script = new List<string>();
+
+            // drop them in reverse order in case db needs it done that way...
+            for (int i = auxiliaryDatabaseObjects.Count - 1; i >= 0; i--)
+            {
+                IAuxiliaryDatabaseObject auxDbObj = auxiliaryDatabaseObjects[i];
+                script.Add(auxDbObj.MigratorDropString(defaultCatalog, defaultSchema));
+            }
+
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Drop))
+                {
+                    foreach (var fk in table.ForeignKeyIterator)
+                    {
+                        if (fk.HasPhysicalConstraint && IncludeAction(fk.ReferencedTable.SchemaActions, SchemaAction.Drop))
+                        {
+                            script.Add(fk.MigratorDropString(defaultCatalog, defaultSchema));
+                        }
+                    }
+                }
+            }
+
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Drop))
+                {
+                    script.Add(table.MigratorDropString(defaultCatalog, defaultSchema));
+                }
+            }
+
+            //IEnumerable<IPersistentIdentifierGenerator> pIDg = IterateGenerators();
+            IEnumerable<IPersistentIdentifierGenerator> pIDg = new List<IPersistentIdentifierGenerator>(); // FIXME: do this
+            foreach (var idGen in pIDg)
+            {
+                string[] lines = idGen.MigratorDropString();
+                if (lines != null)
+                {
+                    foreach (var line in lines)
+                    {
+                        script.Add(line);
+                    }
+                }
+            }
+
+            return script.ToArray();
+        }
+
+        /// <summary>
+        /// Generate DDL for creating tables
+        /// </summary>
+        public string[] MigratorCreationScript(MigratorDialect dialect)
+        {
+            SecondPassCompile();
+
+            string defaultCatalog = PropertiesHelper.GetString(Environment.DefaultCatalog, properties, null);
+            string defaultSchema = PropertiesHelper.GetString(Environment.DefaultSchema, properties, null);
+
+            var script = new List<string>();
+
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Export))
+                {
+                    script.Add(table.MigratorCreateString(dialect, mapping, defaultCatalog, defaultSchema));
+                    script.AddRange(table.SqlCommentStrings(dialect, defaultCatalog, defaultSchema));
+                }
+            }
+
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Export))
+                {
+                    foreach (var uk in table.UniqueKeyIterator)
+                    {
+                        string constraintString = uk.MigratorCreateString(mapping, defaultCatalog, defaultSchema);
+                        if (constraintString != null)
+                        {
+                            script.Add(constraintString);
+                        }
+                    }
+
+                    foreach (var index in table.IndexIterator)
+                    {
+                        script.Add(index.MigratorCreateString(dialect, mapping, defaultCatalog, defaultSchema));
+                    }
+
+                    foreach (var fk in table.ForeignKeyIterator)
+                    {
+                        if (fk.HasPhysicalConstraint && IncludeAction(fk.ReferencedTable.SchemaActions, SchemaAction.Export))
+                        {
+                            script.Add(fk.MigratorCreateString(dialect, mapping, defaultCatalog, defaultSchema));
+                        }
+                    }
+                }
+            }
+
+            //IEnumerable<IPersistentIdentifierGenerator> pIDg = IterateGenerators();
+            IEnumerable<IPersistentIdentifierGenerator> pIDg = new List<IPersistentIdentifierGenerator>(); // FIXME: do this
+            foreach (var idGen in pIDg)
+            {
+                script.AddRange(idGen.MigratorCreateStrings());
+            }
+
+            foreach (var auxDbObj in auxiliaryDatabaseObjects)
+            {
+                script.Add(auxDbObj.MigratorCreateString(dialect, mapping, defaultCatalog, defaultSchema));
+            }
+
+            return script.ToArray();
+        }
+
+        public IEnumerable<string> NewTables(DatabaseMetadata databaseMetadata)
+        {
+            string defaultCatalog = PropertiesHelper.GetString(Environment.DefaultCatalog, properties, null);
+            string defaultSchema = PropertiesHelper.GetString(Environment.DefaultSchema, properties, null);
+
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Update))
+                {
+                    ITableMetadata tableInfo = databaseMetadata.GetTableMetadata(table.Name, table.Schema ?? defaultSchema,
+                                                                                 table.Catalog ?? defaultCatalog, table.IsQuoted);
+                    if (tableInfo == null)
+                    {
+                        yield return table.Name;
+                    }
+                }
+            }
+        }
+
+        public IEnumerable<string> ForeignKeyTables(DatabaseMetadata databaseMetadata)
+        {
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Update))
+                {
+                    ITableMetadata tableInfo = databaseMetadata.GetTableMetadata(table.Name, table.Schema, table.Catalog,
+                                                                                                        table.IsQuoted);
+                    foreach (var fk in table.ForeignKeyIterator)
+                    {
+                        if (fk.HasPhysicalConstraint && IncludeAction(fk.ReferencedTable.SchemaActions, SchemaAction.Update))
+                        {
+                            bool create = tableInfo == null
+                                                ||
+                                                (tableInfo.GetForeignKeyMetadata(fk.NiceName()) == null
+                                                && (tableInfo.GetIndexMetadata(fk.NiceName()) == null));
+                            if (create)
+                            {
+                                yield return fk.ReferencedTable.Name;
+                            }
+                        }
+                    }
+                    if (tableInfo == null)
+                        continue;
+                    foreach (Column column in table.ColumnIterator)
+                    {
+                        IColumnMetadata columnInfo = tableInfo.GetColumnMetadata(column.Name);
+                        if (columnInfo != null)
+                        {
+                            continue;
+                        }
+                        yield return table.Name;
+                    }
+                }
+            }
+        }
+
+        public IEnumerable<string> UsedTables(DatabaseMetadata databaseMetadata)
+        {
+            foreach (Func<DatabaseMetadata, IEnumerable<string>> ien in new Func<DatabaseMetadata, IEnumerable<string>>[] { NewTables, ForeignKeyTables })
+            {
+                foreach (string s in ien.Invoke(databaseMetadata))
+                    yield return s;
+            }
+        }
+
+	    public string[] MigratorUpdateScript(MigratorDialect dialect, DatabaseMetadata databaseMetadata)
+        {
+            SecondPassCompile();
+
+            string defaultCatalog = PropertiesHelper.GetString(Environment.DefaultCatalog, properties, null);
+            string defaultSchema = PropertiesHelper.GetString(Environment.DefaultSchema, properties, null);
+
+            var script = new List<string>(50);
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Update))
+                {
+                    ITableMetadata tableInfo = databaseMetadata.GetTableMetadata(table.Name, table.Schema ?? defaultSchema,
+                                                                                 table.Catalog ?? defaultCatalog, table.IsQuoted);
+                    if (tableInfo == null)
+                    {
+                        script.Add(table.MigratorCreateString(dialect, mapping, defaultCatalog, defaultSchema));
+                    }
+                    else
+                    {
+                        string[] alterDDL = table.MigratorAlterStrings(dialect, mapping, tableInfo, defaultCatalog, defaultSchema);
+                        script.AddRange(alterDDL);
+                    }
+
+                    string[] comments = table.SqlCommentStrings(dialect, defaultCatalog, defaultSchema);
+                    script.AddRange(comments);
+                }
+            }
+
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Update))
+                {
+                    ITableMetadata tableInfo = databaseMetadata.GetTableMetadata(table.Name, table.Schema, table.Catalog,
+                                                                                 table.IsQuoted);
+                    foreach (var fk in table.ForeignKeyIterator)
+                    {
+                        if (fk.HasPhysicalConstraint && IncludeAction(fk.ReferencedTable.SchemaActions, SchemaAction.Update))
+                        {
+                            bool create = tableInfo == null
+                                            ||
+                                            (tableInfo.GetForeignKeyMetadata(fk.NiceName()) == null
+                                            && (tableInfo.GetIndexMetadata(fk.NiceName()) == null));
+                            if (create)
+                            {
+                                script.Add(fk.MigratorCreateString(dialect, mapping, defaultCatalog, defaultSchema));
+                            }
+                        }
+                    }
+
+                    foreach (var index in table.IndexIterator)
+                    {
+                        if (tableInfo == null || tableInfo.GetIndexMetadata(index.Name) == null)
+                        {
+                            script.Add(index.MigratorCreateString(dialect, mapping, defaultCatalog, defaultSchema));
+                        }
+                    }
+                }
+            }
+
+            foreach (var generator in IterateGenerators(dialect))
+            {
+                string key = generator.GeneratorKey();
+                if (!databaseMetadata.IsSequence(key) && !databaseMetadata.IsTable(key))
+                {
+                    string[] lines = generator.MigratorCreateStrings();
+                    foreach (string t in lines)
+                    {
+                        script.Add(t);
+                    }
+                }
+            }
+
+            return script.ToArray();
+        }
+
+        public string[] MigratorDestroyUpdateScript(MigratorDialect dialect, DatabaseMetadata databaseMetadata)
+        {
+            SecondPassCompile();
+
+            string defaultCatalog = PropertiesHelper.GetString(Environment.DefaultCatalog, properties, null);
+            string defaultSchema = PropertiesHelper.GetString(Environment.DefaultSchema, properties, null);
+
+            var script = new List<string>(50);
+
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Update))
+                {
+                    ITableMetadata tableInfo = databaseMetadata.GetTableMetadata(table.Name, table.Schema, table.Catalog,
+                                                                                 table.IsQuoted);
+                    foreach (var fk in table.ForeignKeyIterator)
+                    {
+                        if (fk.HasPhysicalConstraint && IncludeAction(fk.ReferencedTable.SchemaActions, SchemaAction.Update))
+                        {
+                            bool create = tableInfo == null
+                                            ||
+                                            (tableInfo.GetForeignKeyMetadata(fk.NiceName()) == null
+                                            && (tableInfo.GetIndexMetadata(fk.NiceName()) == null));
+                            if (create)
+                            {
+                                script.Add(fk.MigratorDropString(defaultCatalog, defaultSchema));
+                            }
+                        }
+                    }
+
+                    foreach (var index in table.IndexIterator)
+                    {
+                        if (tableInfo == null || tableInfo.GetIndexMetadata(index.Name) == null)
+                        {
+                            script.Add(index.MigratorCreateString(dialect, mapping, defaultCatalog, defaultSchema));
+                        }
+                    }
+                }
+            }
+
+            foreach (var generator in IterateGenerators(dialect))
+            {
+                string key = generator.GeneratorKey();
+                if (!databaseMetadata.IsSequence(key) && !databaseMetadata.IsTable(key))
+                {
+                    string[] lines = generator.MigratorCreateStrings();
+                    foreach (string t in lines)
+                    {
+                        script.Add(t);
+                    }
+                }
+            }
+
+            foreach (var table in TableMappings)
+            {
+                if (table.IsPhysicalTable && IncludeAction(table.SchemaActions, SchemaAction.Update))
+                {
+                    ITableMetadata tableInfo = databaseMetadata.GetTableMetadata(table.Name, table.Schema ?? defaultSchema,
+                                                                                 table.Catalog ?? defaultCatalog, table.IsQuoted);
+                    if (tableInfo == null)
+                    {
+                        script.Add(table.MigratorDropString(defaultCatalog, defaultSchema));
+                    }
+                    else
+                    {
+                        string[] alterDDL = table.MigratorDestroyAlterStrings(dialect, mapping, tableInfo, defaultCatalog, defaultSchema);
+                        script.AddRange(alterDDL);
+                    }
+
+                    string[] comments = table.SqlCommentStrings(dialect, defaultCatalog, defaultSchema);
+                    script.AddRange(comments);
+                }
+            }
+
+            return script.ToArray();
+        }
 	}
 }

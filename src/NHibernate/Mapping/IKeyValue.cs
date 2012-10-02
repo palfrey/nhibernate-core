@@ -14,6 +14,7 @@ namespace NHibernate.Mapping
 		bool IsCascadeDeleteEnabled { get; }
 
 		bool IsIdentityColumn(Dialect.Dialect dialect);
+        bool IsIdentityColumn();
 
 		string NullValue { get; }
 
