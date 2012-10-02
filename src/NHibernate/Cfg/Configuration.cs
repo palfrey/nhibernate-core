@@ -6,7 +6,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Security;
 using System.Text;
 using System.Xml;
 using System.Xml.Schema;
@@ -74,7 +73,7 @@ namespace NHibernate.Cfg
 
 		private EventListeners eventListeners;
 		protected IDictionary<string, TypeDef> typeDefs;
-		protected Iesi.Collections.Generic.ISet<ExtendsQueueEntry> extendsQueue;
+		protected ISet<ExtendsQueueEntry> extendsQueue;
 		protected IDictionary<string, Mappings.TableDescription> tableNameBinding;
 		protected IDictionary<Table, Mappings.ColumnNames> columnNameBindingPerTable;
 
@@ -100,7 +99,7 @@ namespace NHibernate.Cfg
 			defaultAssembly = GetSerialedObject<string>(info, "defaultAssembly");
 			defaultNamespace = GetSerialedObject<string>(info, "defaultNamespace");
 			eventListeners = GetSerialedObject<EventListeners>(info, "eventListeners");
-			//this.extendsQueue = GetSerialedObject<Iesi.Collections.Generic.ISet<ExtendsQueueEntry>>(info, "extendsQueue");
+			//this.extendsQueue = GetSerialedObject<ISet<ExtendsQueueEntry>>(info, "extendsQueue");
 			FilterDefinitions = GetSerialedObject<IDictionary<string, FilterDefinition>>(info, "filterDefinitions");
 			Imports = GetSerialedObject<IDictionary<string, string>>(info, "imports");
 			interceptor = GetSerialedObject<IInterceptor>(info, "interceptor");
@@ -125,7 +124,6 @@ namespace NHibernate.Cfg
 			return (T)info.GetValue(name, typeof(T));
 		}
 
-        [SecurityCritical]
 		public void GetObjectData(SerializationInfo info, StreamingContext context)
 		{
 			ConfigureProxyFactoryFactory();
