@@ -333,7 +333,7 @@ namespace NHibernate.Mapping
 		public string SqlCreateString(Dialect.Dialect dialect, IMapping p, string defaultCatalog, string defaultSchema)
 		{
 			StringBuilder buf =
-				new StringBuilder(HasPrimaryKey ? dialect.CreateTableString : dialect.CreateMultISetTableString).Append(' ').Append(
+				new StringBuilder(HasPrimaryKey ? dialect.CreateTableString : dialect.CreateMultisetTableString).Append(' ').Append(
 					GetQualifiedName(dialect, defaultCatalog, defaultSchema)).Append(" (");
 
 			bool identityColumn = idValue != null && idValue.IsIdentityColumn(dialect);
