@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using NHibernate.AdoNet.Util;
 
 namespace NHibernate.Id
